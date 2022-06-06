@@ -1,0 +1,19 @@
+1. Just ran XGBoost model using Pycaret
+2. Ran all the models using Pycaret (Adaboost) -->0.73 (But will this work on Private test dataset: Doubtful as we have not handled Imbalance dataset)
+3. Ran all the models after handling imbalance dataset using Smote Oversampling (LightGBM) --> 0.68
+4. Ran all the models after handling imbalance dataset using Smote Oversampling (LightGBM Tuned) --> 0.71
+5. Used Created at and Signed Up Date for the first time by separating into Year,Month,Week,Day and Day of the week and followed same process as 4th approach
+   (Extra Trees Classifier came as the best model)  --->0.71 score
+6. Used Created at and Signed Up Date for the first time by separating into Year,Month,Week,Day and Day of the week and followed same process as 4th approach
+   (Extra Trees Classifier came as the best model)-->Same as above but used tuned model -->0.65 score
+7. Lets apply the date as above without balancing the dataset as we did in 2nd place (Best model: Adaboost) -->0.7257
+8. Lets apply the date as above without balancing the dataset as we did in 2nd place (Adaboost Tuned Model) -->0.7299
+
+
+
+
+Try this approach tomorrow:
+9. Winning Solution of WNS Hackathon: Training is getting crashed   --> 0.727  v6 solution (XG Boost Not optimal parameters, Interaction terms used)
+10. Tried feature interaction and feature selection in Pycaret (imbalance Dataset) --> 0.71
+11. Same as above but used best model instead of tuned model  --> 0.70 
+12. Same as above: Used balance dataset, no feature selection, used tuned model
