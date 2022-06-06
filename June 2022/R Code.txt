@@ -1,0 +1,178 @@
+rm(list = ls())
+
+##############################
+library(dplyr)
+library(lubridate)
+library(caret)
+library(MLmetrics)
+library(DMwR2)
+
+## read data
+train <- read.csv('./data/train.csv', na.strings=c("","NA"))
+test <- read.csv('./data/test.csv', na.strings=c("","NA"))
+
+# check missingness
+sapply(train, function(x) sum(is.na(x)))
+sapply(test, function(x) sum(is.na(x)))
+
+
+#### change format of date column
+
+train %>% 
+  mutate(created_at = ymd(created_at),
+         #created_month = month(created_at),
+         #created_day = day(created_at),
+         signup_date = ymd(signup_date)
+  ) -> train
+
+test %>% 
+  mutate(created_at = ymd(created_at),
+         #created_month = month(created_at),
+         #created_day = day(created_at),
+         signup_date = ymd(signup_date)
+  ) -> test
+
+min(train$created_at); max(train$created_at)
+min(test$created_at); max(test$created_at)
+
+
+train %>% 
+  mutate(date_diff = as.numeric(created_at - signup_date)) -> train
+
+test %>% 
+  mutate(date_diff = as.numeric(created_at - signup_date)) -> test
+
+train$date_diff_na <- as.factor(ifelse(is.na(train$date_diff), 1, 0))
+test$date_diff_na <- as.factor(ifelse(is.na(test$date_diff), 1, 0))
+
+train$date_diff <- (ifelse(is.na(train$date_diff), 0, train$date_diff))
+test$date_diff <- (ifelse(is.na(test$date_diff), 0, test$date_diff))
+
+train$prod_pur_NA <- (ifelse(is.na(train$products_purchased), 1, 0))
+test$prod_pur_NA <- (ifelse(is.na(test$products_purchased), 1, 0))
+
+train$products_purchased <- (ifelse(is.na(train$products_purchased), 0, train$products_purchased))
+test$products_purchased <- (ifelse(is.na(test$products_purchased), 0, test$products_purchased))
+
+# drop sign up date
+
+train$signup_date <- NULL; test$signup_date <- NULL
+
+train %>% 
+  mutate(user_active = rowSums(select(., contains('user_activity')))) -> train
+
+test %>% 
+  mutate(user_active = rowSums(select(., contains('user_activity')))) -> test
+
+#train %>%
+#  mutate_at(vars(matches("user_activity")), as.factor) -> train
+
+#train$user_activity_var_11 <- as.factor(ifelse(train$user_activity_var_11 == 4,3,train$user_activity_var_11)-1)
+
+#test %>%
+#  mutate_at(vars(matches("user_activity")), as.factor) -> test
+#test$user_activity_var_9 <- as.factor(ifelse(test$user_activity_var_9 == 2, 1, test$user_activity_var_9)-1)
+
+# train$user_active_bin <- as.factor(ifelse(train$user_active >= 6,1,
+#                                           ifelse(train$user_active <= 2,2,3)))
+# 
+# test$user_active_bin <- as.factor(ifelse(test$user_active >= 6,1,
+#                                           ifelse(test$user_active <= 2,2,3)))
+
+#train$diff_camp <- (train$campaign_var_1 - train$campaign_var_2)
+#train$diff_camp_fact <- as.factor(ifelse(train$diff_camp < 0, -1, 
+                                         ifelse(train$diff_camp > 0, 1, 0)))
+
+#test$diff_camp <- (test$campaign_var_1 - test$campaign_var_2)
+#test$diff_camp_fact <- as.factor(ifelse(test$diff_camp < 0, -1, 
+                                         ifelse(test$diff_camp > 0, 1, 0)))
+
+#train$campaign_var_1 <- as.factor(train$campaign_var_1)
+#train$campaign_var_2 <- as.factor(train$campaign_var_2)
+
+#test$campaign_var_1 <- as.factor(test$campaign_var_1)
+#test$campaign_var_2 <- as.factor(test$campaign_var_2)
+
+#train %>% 
+#  select(created_month, campaign_var_1) %>% 
+#  group_by(created_month, campaign_var_1) %>% 
+#  summarise(count_camp = n()) %>% 
+#  left_join(train,.) -> train
+#train %>% 
+#  select(created_month, campaign_var_2) %>% 
+#  group_by(created_month, campaign_var_2) %>% 
+#  summarise(count_camp2 = n()) %>% 
+#  left_join(train,.) -> train
+#train$count_camp <- (train$count_camp-mean(train$count_camp))/sd(train$count_camp)
+#train$count_camp2 <- (train$count_camp2-mean(train$count_camp2))/sd(train$count_camp2)
+
+#test %>% 
+#  select(created_month, campaign_var_1) %>% 
+#  group_by(created_month, campaign_var_1) %>% 
+#  summarise(count_camp = n()) %>% 
+#  left_join(test,.) -> test
+#test %>% 
+#  select(created_month, campaign_var_2) %>% 
+#  group_by(created_month, campaign_var_2) %>% 
+#  summarise(count_camp2 = n()) %>% 
+#  left_join(test,.) -> test
+#test$count_camp <- (test$count_camp-mean(test$count_camp))/sd(test$count_camp)
+#test$count_camp2 <- (test$count_camp2-mean(test$count_camp2))/sd(test$count_camp2)
+
+
+## model
+library(caret)
+
+time_slice <- createTimeSlices(train$created_at, initialWindow = 15000, horizon = 10000, 
+                               fixedWindow = F, skip = 1500)
+
+time_slice$train %>% length()
+time_slice$test %>% length()
+
+# 24928 - 13134
+
+myTimeControl <- trainControl(method = "timeslice",  initialWindow = 15000, horizon = 10000, 
+                              fixedWindow = T, skip = 1500,  
+                              allowParallel = TRUE,  
+                              classProbs = TRUE,
+                              summaryFunction = prSummary,verboseIter = TRUE) 
+
+train$buy <- ifelse(train$buy == 1, 'x1','x0')
+
+set.seed(112233)
+library(parallel) 
+# Calculate the number of cores
+no_cores <- detectCores() - 1
+
+library(doParallel)
+# create the cluster for caret to use
+cl <- makePSOCKcluster(no_cores)
+registerDoParallel(cl)
+
+tgrid <- expand.grid(
+  .mtry = 4:8,
+  .splitrule = "gini",
+  .min.node.size = c(5, 10, 15)
+)
+
+modelRF <- train(
+  buy ~ . ,  data =  train[,-c(1,2)],   
+  method = "ranger",
+  metric = 'F',
+  tuneGrid = tgrid,
+  num.trees = 500,
+  trControl = myTimeControl
+  )
+
+stopCluster(cl)
+registerDoSEQ()
+
+test_pred <- predict(modelRF, test[,-c(1,2)], 'prob')[,2]
+summary(test_pred)
+pred_test <- ifelse(test_pred >= 0.4,1,0)
+table(pred_test)
+submiss <- read.csv('./data/sample_submission.csv')
+submiss$buy <- pred_test
+table(submiss$buy)
+write.csv(submiss, 'submission.csv', row.names = F)
+
